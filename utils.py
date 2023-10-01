@@ -85,4 +85,17 @@ class github:
         else:
             print("Something unexpected happened")
     
-    
+    def is_user_member_of_org(self, org: str, user_id: int) -> bool:
+        """
+        Check if a user is a member of a GitHub organization.
+
+        Args:
+            org (str): The name of the GitHub organization.
+            user_id (int): The ID of the user.
+
+        Returns:
+            bool: True if the user is a member, False otherwise.
+        """
+        res = self.gh_request(f"/orgs/{org}/members/{user_id}")
+        return res.status_code == 204  # 204 means the user is a member
+
