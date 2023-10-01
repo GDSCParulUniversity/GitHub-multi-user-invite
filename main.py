@@ -27,7 +27,7 @@ def multi_invite(org: str, a_users: list):
         uid = gh.get_user_id(user)
 
         if uid is None:
-            cprint(f"[red]: user {user} does not exist or is already a member of the organization")
+            cprint(f"[red]: user {user} does not exist")
             continue
 
         # Check if user is already a member of the organization
@@ -43,7 +43,7 @@ def multi_invite(org: str, a_users: list):
         elif inv.status_code == 422:  # 422 Unprocessable Entity
             error_response = inv.json()
             if any(error['code'] == 'unprocessable' for error in error_response.get('errors', [])):
-                cprint(f"[yellow]: user {user} is already invited or a member of the organization")
+                cprint(f"[yellow]: user {user} is already invited")
             else:
                 print(f"[red]: couldn't invite {user}")
                 print(f"[gray]: LOG: {error_response}")
