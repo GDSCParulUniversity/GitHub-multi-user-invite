@@ -10,20 +10,39 @@ from utils import github
 gh: github
 
 
-def multi_invite(org: str, a_users: list):
+def multi_invite(org: str, users_file: str):
     """
-    Invite multiple users to a GitHub organization.
+    Invite multiple users to a GitHub organization with specified roles.
 
     Args:
         org (str): The name of the GitHub organization.
-        users (list): A list of usernames to invite.
+        users_file (str): Path to the file containing usernames and roles.
 
     Returns:
         None
     """
-    # check if user exists
-    cprint(f"[magenta]  Inviting {len(a_users)} user/s ..")
-    for user in track(a_users, description="Inviting users"):
+    # Load users and roles
+    users_with_roles = []
+    valid_roles = ["admin", "direct_member", "billing_manager"]
+
+    if os.path.exists(users_file):
+        with open(users_file, 'r', encoding="utf-8") as f:
+            users_with_roles = f.readlines()
+            users_with_roles = [line.strip().split(':') for line in users_with_roles]
+
+    # Invite users with roles
+    cprint(f"[magenta]  Inviting {len(users_with_roles)} user/s ..")
+    for idx, user_role_tuple in enumerate(users_with_roles):
+        if len(user_role_tuple) != 2:
+            cprint(f"[yellow]: Invalid format in line {idx + 1}. Skipping.")
+            continue
+
+        user, role = map(str.strip, user_role_tuple)
+
+        if role not in valid_roles:
+            cprint(f"[yellow]: Invalid role {role} specified for user {user}. Skipping.")
+            continue
+
         uid = gh.get_user_id(user)
 
         if uid is None:
@@ -35,8 +54,8 @@ def multi_invite(org: str, a_users: list):
             cprint(f"[yellow]: user {user} is already a member of the organization")
             continue
 
-        cprint(f"[green]: sending invite to {user}.")
-        inv = gh.invite_user_org(org, uid)
+        cprint(f"[green]: sending invite to {user} with role {role}.")
+        inv = gh.invite_user_org(org, uid, role=role)
 
         if inv.status_code == 201:
             cprint(f"[green]: invite sent to {user}.")
@@ -63,7 +82,7 @@ if __name__ == "__main__":
         epilog="v0.0.1"
     )
     parser.add_argument("--users_file", dest="users_file",
-                        help="invite multiple users", required=True)
+                        help="invite multiple users with roles", required=True)
     parser.add_argument(
         "--org", dest="org", help="The organization to invite the user to.", required=True)
     args = parser.parse_args()
@@ -75,12 +94,5 @@ if __name__ == "__main__":
         cprint("[red]: requires org name")
         sys.exit(1)
 
-    users = []
     if args.users_file:
-        usr_file = args.users_file
-        if os.path.exists(usr_file):
-            with open(usr_file, 'r', encoding="utf-8") as f:
-                users = f.readlines()
-                users = [u.strip() for u in users]
-
-            multi_invite(args.org, a_users=users)
+        multi_invite(args.org, users_file=args.users_file)
