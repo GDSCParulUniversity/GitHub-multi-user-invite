@@ -21,18 +21,18 @@ GITHUB_ACCESS_TOKEN=your_token_here
 > **Note**
 > You should be have owner/admin access to the organization.
 
-Create a file ( e.g. `users.txt` ) with the list of users to invite, one per line.
+Create a file ( e.g. `users.txt` ) with the list of users to invite, one per line. You can include a role by including `username:role` with options being `admin`, `direct_member` or `billing_manager`, otherwise roles will default to `direct_member`.
 
 example:
 
 ```txt
 saicharankandukuri
-vinci-d
+vinci-d:admin
 torvalds
 ```
 
 > **Warning**
-> Cross check the usernames before adding them to the list for safety.
+> Cross check the usernames and roles (if any) before adding them to the list for safety.
 
 Run the script:
 
