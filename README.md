@@ -19,11 +19,11 @@ GITHUB_ACCESS_TOKEN=your_token_here
 ```
 
 > **Note**
-> You should be have owner/admin access to the organization.
+> You should have owner/admin access to the organization.
 
-Create a file ( e.g. `users.txt` ) with the list of users to invite, one per line.
+Edit file 'users.txt' with the list of users to invite. There should only be one user per line.
 
-example:
+Example of 'users.txt' file:
 
 ```txt
 saicharankandukuri
@@ -32,7 +32,7 @@ torvalds
 ```
 
 > **Warning**
-> Cross check the usernames before adding them to the list for safety.
+> Cross check the usernames before adding them to the list for safety of the organization.
 
 Run the script:
 
@@ -42,7 +42,24 @@ python3 main.py --org your_org_name --users_file users.txt
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+1. Fork the repository
+2. Clone your fork
+```bash
+git clone https://github.com/<your-username-here>/Github-multi-user-invite.git
+```
+3. Navigate to the project directory
+```bash
+cd github-multi-user-invite
+```
+4. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+5. Make changes that you want
+6. Submit pull request
+
+All pull requests are welcome. 
+For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
