@@ -4,10 +4,12 @@ import sys
 import argparse
 from dotenv import load_dotenv
 from rich.progress import track
+from rich.console import Console
 from rich import print as cprint
 from utils import github
 
 gh: github
+console = Console()
 
 
 def multi_invite(org: str, users_file: str):
@@ -32,7 +34,8 @@ def multi_invite(org: str, users_file: str):
 
     # Invite users with roles
     cprint(f"[magenta]  Inviting {len(users_with_roles)} user/s ..")
-    for idx, user_role_tuple in enumerate(users_with_roles):
+
+    for idx, user_role_tuple in track(enumerate(users_with_roles), total=len(users_with_roles), description="Inviting users"):
         if len(user_role_tuple) != 2:
             cprint(f"[yellow]: Invalid format in line {idx + 1}. Skipping.")
             continue
