@@ -10,20 +10,20 @@ from utils import github
 gh: github
 
 
-def multi_invite(org: str, a_users: list):
+def multi_invite(org: str, a_users: list[tuple[str, str]]):
     """
     Invite multiple users to a GitHub organization.
 
     Args:
         org (str): The name of the GitHub organization.
-        users (list): A list of usernames to invite.
+        users (list): A list of (username, role) tuples for usernames to invite.
 
     Returns:
         None
     """
     # check if user exists
     cprint(f"[magenta]  Inviting {len(a_users)} user/s ..")
-    for user in track(a_users, description="Inviting users"):
+    for user, role in track(a_users, description="Inviting users"):
         uid = gh.get_user_id(user)
 
         if uid is None:
@@ -35,8 +35,8 @@ def multi_invite(org: str, a_users: list):
             cprint(f"[yellow]: user {user} is already a member of the organization")
             continue
 
-        cprint(f"[green]: sending invite to {user}.")
-        inv = gh.invite_user_org(org, uid)
+        cprint(f"[green]: sending invite to {user} with role {role}.")
+        inv = gh.invite_user_org(org, uid, role=role)
 
         if inv.status_code == 201:
             cprint(f"[green]: invite sent to {user}.")
@@ -81,6 +81,19 @@ if __name__ == "__main__":
         if os.path.exists(usr_file):
             with open(usr_file, 'r', encoding="utf-8") as f:
                 users = f.readlines()
-                users = [u.strip() for u in users]
 
-            multi_invite(args.org, a_users=users)
+                users_with_roles = []
+                for line in users:
+                    line = line.strip().split(":")
+
+                    if line:
+                        if len(line) == 2:
+                            user, role = line
+
+                        else:
+                            user = line[0]
+                            role = "direct_member"
+
+                        users_with_roles.append((user, role))
+
+            multi_invite(args.org, a_users=users_with_roles)
