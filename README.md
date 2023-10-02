@@ -23,7 +23,7 @@
     
     
 
-> *Note :*
+> **Note:**
 > You should be have owner/admin access to the organization.
 > You should have owner/admin access to the organization.
 
