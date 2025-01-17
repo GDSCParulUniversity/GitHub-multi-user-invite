@@ -2,6 +2,17 @@ import json, requests
 from requests.exceptions import RequestException, Timeout
 from typing import Optional
 import time
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('github_inviter.log')
+    ]
+)
+logger = logging.getLogger('github-inviter')
 
 class GithubAPIError(Exception):
     """Custom exception for GitHub API errors"""
@@ -9,6 +20,8 @@ class GithubAPIError(Exception):
         self.status_code = status_code
         self.response = response
         super().__init__(message)
+        # Log only errors, not the response details
+        logger.error(f"GitHub API Error: {message}")
 
 class github:
     def __init__(self, auth, org=None):
@@ -40,8 +53,8 @@ class github:
         for attempt in range(self.max_retries):
             try:
                 if attempt > 0:
-                    # Exponential backoff: 1s, 2s, 4s between retries
                     retry_wait = self.retry_delay * (2 ** (attempt - 1))
+                    logger.warning(f"Retrying request (attempt {attempt + 1}/{self.max_retries})")
                     time.sleep(retry_wait)
                 
                 res = requests.request(
@@ -61,18 +74,18 @@ class github:
                     if res.status_code == 401:
                         raise GithubAPIError("Authentication failed. Please check your GitHub token", res.status_code, res.json())
                     elif res.status_code == 404:
-                        return res  # Return 404 response for user checks
+                        return res
                     else:
                         raise GithubAPIError(f"Client error: {res.status_code}", res.status_code, res.json())
                 
                 # Retry on rate limits and server errors
                 if res.status_code == 403 or res.status_code >= 500:
-                    if attempt == self.max_retries - 1:  # Last attempt
+                    if attempt == self.max_retries - 1:
                         if res.status_code == 403:
                             raise GithubAPIError("Rate limit exceeded or insufficient permissions", res.status_code, res.json())
                         else:
                             raise GithubAPIError("GitHub server error", res.status_code, res.json())
-                    continue  # Retry on next iteration
+                    continue
                 
                 return res
                 
@@ -85,7 +98,6 @@ class github:
                 if attempt == self.max_retries - 1:
                     raise GithubAPIError(f"Network error: {str(e)}", getattr(e.response, 'status_code', None))
         
-        # If we get here, all retries failed
         raise GithubAPIError(f"All retry attempts failed: {str(last_exception)}")
     
     def invite_user_org(
