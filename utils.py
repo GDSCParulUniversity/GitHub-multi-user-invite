@@ -1,25 +1,58 @@
 import json, requests
+from requests.exceptions import RequestException, Timeout
+
 class github:
     def __init__(self, auth, org=None):
         self.auth = auth
         self.org = org
+        self.timeout = 30  # Default timeout in seconds
     
     def gh_request(self, path: str, method="GET", data: dict = {}) -> requests.Response:
-        """Make a request to the GitHub API.
+        """Make a request to the GitHub API with proper error handling and timeout.
+
+        Args:
+            path (str): The API endpoint path
+            method (str, optional): HTTP method. Defaults to "GET".
+            data (dict, optional): Request payload. Defaults to {}.
+
+        Returns:
+            requests.Response: The response from the GitHub API
+
+        Raises:
+            RequestException: For any request-related errors
+            Timeout: For timeout errors
         """
         data = json.dumps(data) if data != {} else None
         
-        res = requests.request(
-            method=method, url=f"https://api.github.com{path}", 
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {self.auth}",
-                "X-GitHub-Api-Version": "2022-11-28"
-            }, 
-            data=data
-        )
-        
-        return res
+        try:
+            res = requests.request(
+                method=method, 
+                url=f"https://api.github.com{path}", 
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": f"Bearer {self.auth}",
+                    "X-GitHub-Api-Version": "2022-11-28"
+                }, 
+                data=data,
+                timeout=self.timeout
+            )
+            res.raise_for_status()  # Raise exception for 4XX and 5XX status codes
+            return res
+            
+        except Timeout:
+            print(f"[red]Request timed out after {self.timeout} seconds")
+            raise
+        except RequestException as e:
+            if hasattr(e.response, 'status_code'):
+                if e.response.status_code == 404:
+                    return e.response  # Return 404 response for user checks
+                elif e.response.status_code == 401:
+                    print("[red]Authentication failed. Please check your GitHub token")
+                elif e.response.status_code == 403:
+                    print("[red]Rate limit exceeded or insufficient permissions")
+                elif e.response.status_code >= 500:
+                    print("[red]GitHub server error. Please try again later")
+            return e.response if hasattr(e, 'response') else None
     
     def invite_user_org(
         self, 

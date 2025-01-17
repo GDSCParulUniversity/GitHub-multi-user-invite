@@ -5,6 +5,7 @@ import argparse
 from dotenv import load_dotenv
 from rich.progress import track
 from rich import print as cprint
+from requests.exceptions import RequestException, Timeout
 from utils import github
 
 gh: github
@@ -21,35 +22,67 @@ def multi_invite(org: str, a_users: list):
     Returns:
         None
     """
-    # check if user exists
+    successful_invites = 0
+    failed_invites = 0
+    already_members = 0
+    
     cprint(f"[magenta]  Inviting {len(a_users)} user/s ..")
+    
     for user in track(a_users, description="Inviting users"):
-        uid = gh.get_user_id(user)
+        try:
+            uid = gh.get_user_id(user)
 
-        if uid is None:
-            cprint(f"[red]: user {user} does not exist")
-            continue
+            if uid is None:
+                cprint(f"[red]: User {user} does not exist")
+                failed_invites += 1
+                continue
 
-        # Check if user is already a member of the organization
-        if gh.is_user_member_of_org(org, uid):
-            cprint(f"[yellow]: user {user} is already a member of the organization")
-            continue
+            # Check if user is already a member of the organization
+            if gh.is_user_member_of_org(org, uid):
+                cprint(f"[yellow]: User {user} is already a member of the organization")
+                already_members += 1
+                continue
 
-        cprint(f"[green]: sending invite to {user}.")
-        inv = gh.invite_user_org(org, uid)
+            cprint(f"[green]: Sending invite to {user}")
+            inv = gh.invite_user_org(org, uid)
 
-        if inv.status_code == 201:
-            cprint(f"[green]: invite sent to {user}.")
-        elif inv.status_code == 422:  # 422 Unprocessable Entity
-            error_response = inv.json()
-            if any(error['code'] == 'unprocessable' for error in error_response.get('errors', [])):
-                cprint(f"[yellow]: user {user} is already invited")
+            if inv is None:
+                cprint(f"[red]: Failed to send invite to {user} due to network error")
+                failed_invites += 1
+                continue
+
+            if inv.status_code == 201:
+                cprint(f"[green]: Invite sent successfully to {user}")
+                successful_invites += 1
+            elif inv.status_code == 422:  # 422 Unprocessable Entity
+                error_response = inv.json()
+                if any(error['code'] == 'unprocessable' for error in error_response.get('errors', [])):
+                    cprint(f"[yellow]: User {user} is already invited")
+                    already_members += 1
+                else:
+                    cprint(f"[red]: Could not invite {user}")
+                    cprint(f"[gray]: Error details: {error_response}")
+                    failed_invites += 1
             else:
-                print(f"[red]: couldn't invite {user}")
-                print(f"[gray]: LOG: {error_response}")
-        else:
-            print(f"[red]: couldn't invite {user}")
-            print(f"[gray]: LOG: {inv.json()}")
+                cprint(f"[red]: Could not invite {user}")
+                cprint(f"[gray]: Error details: {inv.json()}")
+                failed_invites += 1
+
+        except Timeout:
+            cprint(f"[red]: Request timed out while processing {user}")
+            failed_invites += 1
+        except RequestException as e:
+            cprint(f"[red]: Network error while processing {user}: {str(e)}")
+            failed_invites += 1
+        except Exception as e:
+            cprint(f"[red]: Unexpected error while processing {user}: {str(e)}")
+            failed_invites += 1
+
+    # Print summary
+    cprint("\n[bold]Invitation Summary:")
+    cprint(f"[green]✓ Successfully invited: {successful_invites}")
+    cprint(f"[yellow]⚠ Already members/invited: {already_members}")
+    cprint(f"[red]✗ Failed invites: {failed_invites}")
 
 
 if __name__ == "__main__":
