@@ -1,5 +1,13 @@
 import json, requests
 from requests.exceptions import RequestException, Timeout
+from typing import Optional
+
+class GithubAPIError(Exception):
+    """Custom exception for GitHub API errors"""
+    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[dict] = None):
+        self.status_code = status_code
+        self.response = response
+        super().__init__(message)
 
 class github:
     def __init__(self, auth, org=None):
@@ -19,6 +27,7 @@ class github:
             requests.Response: The response from the GitHub API
 
         Raises:
+            GithubAPIError: For GitHub API specific errors
             RequestException: For any request-related errors
             Timeout: For timeout errors
         """
@@ -36,23 +45,23 @@ class github:
                 data=data,
                 timeout=self.timeout
             )
-            res.raise_for_status()  # Raise exception for 4XX and 5XX status codes
+            
+            if res.status_code == 401:
+                raise GithubAPIError("Authentication failed. Please check your GitHub token", res.status_code, res.json())
+            elif res.status_code == 403:
+                raise GithubAPIError("Rate limit exceeded or insufficient permissions", res.status_code, res.json())
+            elif res.status_code >= 500:
+                raise GithubAPIError("GitHub server error", res.status_code, res.json())
+            
             return res
             
         except Timeout:
-            print(f"[red]Request timed out after {self.timeout} seconds")
-            raise
+            raise GithubAPIError(f"Request timed out after {self.timeout} seconds")
         except RequestException as e:
             if hasattr(e.response, 'status_code'):
                 if e.response.status_code == 404:
                     return e.response  # Return 404 response for user checks
-                elif e.response.status_code == 401:
-                    print("[red]Authentication failed. Please check your GitHub token")
-                elif e.response.status_code == 403:
-                    print("[red]Rate limit exceeded or insufficient permissions")
-                elif e.response.status_code >= 500:
-                    print("[red]GitHub server error. Please try again later")
-            return e.response if hasattr(e, 'response') else None
+            raise GithubAPIError(f"Network error: {str(e)}", getattr(e.response, 'status_code', None))
     
     def invite_user_org(
         self, 
