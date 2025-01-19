@@ -1,11 +1,35 @@
 import json, requests
 from requests.exceptions import RequestException, Timeout
+from typing import Optional
+import time
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('github_inviter.log')
+    ]
+)
+logger = logging.getLogger('github-inviter')
+
+class GithubAPIError(Exception):
+    """Custom exception for GitHub API errors"""
+    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[dict] = None):
+        self.status_code = status_code
+        self.response = response
+        super().__init__(message)
+        # Log only errors, not the response details
+        logger.error(f"GitHub API Error: {message}")
 
 class github:
     def __init__(self, auth, org=None):
         self.auth = auth
         self.org = org
         self.timeout = 30  # Default timeout in seconds
+        self.max_retries = 3  # Maximum number of retry attempts
+        self.retry_delay = 1  # Initial delay between retries in seconds
     
     def gh_request(self, path: str, method="GET", data: dict = {}) -> requests.Response:
         """Make a request to the GitHub API with proper error handling and timeout.
@@ -19,40 +43,62 @@ class github:
             requests.Response: The response from the GitHub API
 
         Raises:
+            GithubAPIError: For GitHub API specific errors
             RequestException: For any request-related errors
             Timeout: For timeout errors
         """
         data = json.dumps(data) if data != {} else None
+        last_exception = None
         
-        try:
-            res = requests.request(
-                method=method, 
-                url=f"https://api.github.com{path}", 
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "Authorization": f"Bearer {self.auth}",
-                    "X-GitHub-Api-Version": "2022-11-28"
-                }, 
-                data=data,
-                timeout=self.timeout
-            )
-            res.raise_for_status()  # Raise exception for 4XX and 5XX status codes
-            return res
-            
-        except Timeout:
-            print(f"[red]Request timed out after {self.timeout} seconds")
-            raise
-        except RequestException as e:
-            if hasattr(e.response, 'status_code'):
-                if e.response.status_code == 404:
-                    return e.response  # Return 404 response for user checks
-                elif e.response.status_code == 401:
-                    print("[red]Authentication failed. Please check your GitHub token")
-                elif e.response.status_code == 403:
-                    print("[red]Rate limit exceeded or insufficient permissions")
-                elif e.response.status_code >= 500:
-                    print("[red]GitHub server error. Please try again later")
-            return e.response if hasattr(e, 'response') else None
+        for attempt in range(self.max_retries):
+            try:
+                if attempt > 0:
+                    retry_wait = self.retry_delay * (2 ** (attempt - 1))
+                    logger.warning(f"Retrying request (attempt {attempt + 1}/{self.max_retries})")
+                    time.sleep(retry_wait)
+                
+                res = requests.request(
+                    method=method, 
+                    url=f"https://api.github.com{path}", 
+                    headers={
+                        "Accept": "application/vnd.github+json",
+                        "Authorization": f"Bearer {self.auth}",
+                        "X-GitHub-Api-Version": "2022-11-28"
+                    }, 
+                    data=data,
+                    timeout=self.timeout
+                )
+                
+                # Don't retry on client errors (4xx) except rate limits
+                if 400 <= res.status_code < 500 and res.status_code != 403:
+                    if res.status_code == 401:
+                        raise GithubAPIError("Authentication failed. Please check your GitHub token", res.status_code, res.json())
+                    elif res.status_code == 404:
+                        return res
+                    else:
+                        raise GithubAPIError(f"Client error: {res.status_code}", res.status_code, res.json())
+                
+                # Retry on rate limits and server errors
+                if res.status_code == 403 or res.status_code >= 500:
+                    if attempt == self.max_retries - 1:
+                        if res.status_code == 403:
+                            raise GithubAPIError("Rate limit exceeded or insufficient permissions", res.status_code, res.json())
+                        else:
+                            raise GithubAPIError("GitHub server error", res.status_code, res.json())
+                    continue
+                
+                return res
+                
+            except Timeout as e:
+                last_exception = e
+                if attempt == self.max_retries - 1:
+                    raise GithubAPIError(f"Request timed out after {self.timeout} seconds")
+            except RequestException as e:
+                last_exception = e
+                if attempt == self.max_retries - 1:
+                    raise GithubAPIError(f"Network error: {str(e)}", getattr(e.response, 'status_code', None))
+        
+        raise GithubAPIError(f"All retry attempts failed: {str(last_exception)}")
     
     def invite_user_org(
         self, 

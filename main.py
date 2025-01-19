@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from rich.progress import track
 from rich import print as cprint
 from requests.exceptions import RequestException, Timeout
-from utils import github
+from utils import github, GithubAPIError
 
 gh: github
 
@@ -46,11 +46,6 @@ def multi_invite(org: str, a_users: list):
             cprint(f"[green]: Sending invite to {user}")
             inv = gh.invite_user_org(org, uid)
 
-            if inv is None:
-                cprint(f"[red]: Failed to send invite to {user} due to network error")
-                failed_invites += 1
-                continue
-
             if inv.status_code == 201:
                 cprint(f"[green]: Invite sent successfully to {user}")
                 successful_invites += 1
@@ -68,11 +63,12 @@ def multi_invite(org: str, a_users: list):
                 cprint(f"[gray]: Error details: {inv.json()}")
                 failed_invites += 1
 
-        except Timeout:
-            cprint(f"[red]: Request timed out while processing {user}")
-            failed_invites += 1
-        except RequestException as e:
-            cprint(f"[red]: Network error while processing {user}: {str(e)}")
+        except GithubAPIError as e:
+            cprint(f"[red]: GitHub API error while processing {user}: {str(e)}")
+            if e.status_code:
+                cprint(f"[gray]: Status code: {e.status_code}")
+            if e.response:
+                cprint(f"[gray]: Response details: {e.response}")
             failed_invites += 1
         except Exception as e:
             cprint(f"[red]: Unexpected error while processing {user}: {str(e)}")
